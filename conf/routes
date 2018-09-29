@@ -1,0 +1,7 @@
+
+#ENVIRONMENT ROUTES
+GET         /environment           controllers.EnvironmentController.createEnvironment()
+
+#PRODUCT ROUTES
+GET         /:envID/product        controllers.ProductController.getProducts(envID)
+POST        /:envID/product        controllers.ProductController.createProduct(envID)
