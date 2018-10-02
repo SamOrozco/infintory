@@ -12,8 +12,11 @@ import play.mvc.Controller;
 import play.mvc.Result;
 import tyrex.services.UUID;
 
-import javax.swing.text.html.Option;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+
+import static helpers.ValidationHelper.NullOrEmpty;
 
 public class InventoryController extends Controller {
 
@@ -61,11 +64,31 @@ public class InventoryController extends Controller {
                 String transKey = InventoryHelper.handleTransactionItems(invID,
                                                                          envID,
                                                                          item);
+
                 return ok(transKey);
             }
         } catch (Exception e) {
             e.printStackTrace();
             return badRequest(e.getMessage());
+        }
+    }
+
+
+    public Result commitInventory(String envId, String invId) {
+        Optional<Inventory> optInv = InventoryHelper.findByKey(invId);
+        if (!optInv.isPresent()) {
+            return badRequest(String.format("Inventory %s does not exist.", invId));
+        }
+        Inventory inventory = optInv.get();
+        String currentSnapshot = inventory.getCurrentSnapshot();
+        String currentTransaction = inventory.getCurrentTransaction();
+        if (!NullOrEmpty(currentSnapshot)) {
+            Map<Integer, InventoryItem> productItemMap = InventoryHelper.getSnapshotItemMap(envId,
+                                                                                            currentSnapshot);
+        }
+        if (!NullOrEmpty(currentTransaction)) {
+            List<InventoryTransaction> transactions = InventoryHelper.getTransactionsForInv(invId,
+                                                                                            currentTransaction);
         }
     }
 }

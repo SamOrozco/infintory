@@ -2,14 +2,58 @@ package helpers;
 
 import com.avaje.ebean.Ebean;
 import com.avaje.ebean.Transaction;
+import models.inventory.Inventory;
+import models.inventory.InventoryItem;
 import models.inventory.InventoryTransaction;
 
 import java.util.*;
 
-import static play.mvc.Results.badRequest;
+import static helpers.ValidationHelper.NullOrEmpty;
 
 public class InventoryHelper {
     private static final int MAX_TRANSACTION = 500;
+
+
+    public static List<InventoryTransaction> getTransactionsForInv(String invId,
+                                                                   String currentTransaction) {
+        InventoryTransaction transaction = getTransactionByKey(currentTransaction);
+        return Ebean.find(InventoryTransaction.class)
+                    .where()
+                    .eq("inventory_key", invId)
+                    .eq("transaction_key", currentTransaction)
+                    .lt("transaction_id", transaction.getTransactionId())
+                    .findList();
+    }
+
+
+    public static InventoryTransaction getTransactionByKey(String transKey) {
+        return Ebean.find(InventoryTransaction.class)
+                    .where()
+                    .eq("transaction_key", transKey)
+                    .findUnique();
+    }
+
+    public static Map<Integer, InventoryItem> getSnapshotItemMap(String envId, String snapshotKey) {
+        List<InventoryItem> items = Ebean.find(InventoryItem.class)
+                                         .where()
+                                         .eq("env_id", envId)
+                                         .eq("snapshot_key", snapshotKey)
+                                         .findList();
+        if (NullOrEmpty(items)) {
+            return new HashMap<>();
+        }
+
+        return CollectionHelper.mapToProperty(items,
+                                              InventoryItem::getProductId);
+    }
+
+
+    public static Optional<Inventory> findByKey(String key) {
+        return Optional.ofNullable(Ebean.find(Inventory.class)
+                                        .where()
+                                        .eq("inventory_key", key)
+                                        .findUnique());
+    }
 
     public static String handleTransactionItems(String inventoryKey,
                                                 String environmentKey,
@@ -49,8 +93,11 @@ public class InventoryHelper {
 
         Transaction ebeanTransaction = Ebean.beginTransaction();
         ebeanTransaction.setBatchSize(30);
-
         try {
+            Optional<Inventory> inventory = InventoryHelper.findByKey(inventoryKey);
+            if (!inventory.isPresent()) {
+                throw new RuntimeException("Inventory doesn't exist");
+            }
             for (Map.Entry<Integer, Double> entry : netChange.entrySet()) {
                 InventoryTransaction transaction = new InventoryTransaction();
                 transaction.setProductId(entry.getKey());
@@ -60,6 +107,9 @@ public class InventoryHelper {
                 transaction.setEnvironmentId(environmentKey);
                 transaction.insert();
             }
+            Inventory finalInv = inventory.get();
+            finalInv.setCurrentTransaction(transactionId);
+            finalInv.update();
             ebeanTransaction.commit();
             return transactionId;
         } catch (Exception e) {
