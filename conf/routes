@@ -1,7 +1,14 @@
 
 #ENVIRONMENT ROUTES
-GET         /environment           controllers.EnvironmentController.createEnvironment()
+GET         /environment                                controllers.EnvironmentController.createEnvironment()
 
 #PRODUCT ROUTES
-GET         /:envID/product        controllers.ProductController.getProducts(envID)
-POST        /:envID/product        controllers.ProductController.createProduct(envID)
+GET         /:envID/product                             controllers.ProductController.getProducts(envID)
+POST        /:envID/product                             controllers.ProductController.createProduct(envID)
+
+#Uom routes
+POST        /:envID/uom                                 controllers.UomController.createUom(envID)
+#Inventory
+POST        /:envID/inventory                           controllers.InventoryController.createInventory(envID)
+POST        /:envID/inventory-item                      controllers.InventoryController.createInventoryItem(envID)
+POST        /:envID/inventory-transaction/:invID        controllers.InventoryController.inventoryTransaction(envID, invID)

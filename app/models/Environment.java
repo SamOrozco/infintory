@@ -2,17 +2,19 @@ package models;
 
 
 import com.avaje.ebean.Model;
+import helpers.ErrorHelper;
 import org.joda.time.DateTime;
 
 import javax.persistence.Column;
 import javax.persistence.Entity;
 import javax.persistence.Table;
+import java.util.UUID;
 
 @Entity
 @Table(name = "environment")
 public class Environment extends Model {
 
-    @Column(name = "environment_id")
+    @Column(name = "env_id")
     private int environmentId;
 
     @Column(name = "environment_key")
@@ -20,6 +22,16 @@ public class Environment extends Model {
 
     @Column(name = "create_date", updatable = false, insertable = false)
     private DateTime createDate;
+
+    public static String newEnvironment() {
+        String environmentKey = UUID.randomUUID().toString();
+        try {
+            new Environment(environmentKey).insert();
+            return environmentKey;
+        } catch (Exception e) {
+            throw ErrorHelper.databaseInsertError("environment");
+        }
+    }
 
     public Environment(String environmentKey) {
         this.environmentKey = environmentKey;

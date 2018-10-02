@@ -8,7 +8,15 @@ public class JsonHelper {
     private static final ObjectMapper mapper = new ObjectMapper();
 
 
-    public static <T> T deserializeJson(Class<T> clazz, JsonNode node) throws Exception {
+    public static <T> T deserializeObject(Class<T> clazz, JsonNode node) throws Exception {
+        try {
+            return mapper.treeToValue(node, clazz);
+        } catch (JsonProcessingException e) {
+            throw ErrorHelper.jsonParseError(e.getMessage());
+        }
+    }
+
+    public static <T> T[] deserializeArray(Class<T[]> clazz, JsonNode node) throws Exception {
         try {
             return mapper.treeToValue(node, clazz);
         } catch (JsonProcessingException e) {

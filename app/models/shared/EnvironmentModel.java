@@ -8,11 +8,11 @@ import javax.persistence.MappedSuperclass;
 
 @MappedSuperclass
 public abstract class EnvironmentModel extends Model {
-    @Column
+    @Column(name = "env_id")
     private String environmentId;
-    @Column
+    @Column(updatable = false, insertable = false)
     private DateTime createDate;
-    @Column
+    @Column(updatable = false, insertable = false)
     private DateTime updateDate;
 
     public String getEnvironmentId() {
