@@ -4,6 +4,7 @@ import com.avaje.ebean.Ebean;
 import com.avaje.ebean.Transaction;
 import models.inventory.Inventory;
 import models.inventory.InventoryItem;
+import models.inventory.InventorySnapshot;
 import models.inventory.InventoryTransaction;
 
 import java.util.*;
@@ -14,18 +15,58 @@ public class InventoryHelper {
     private static final int MAX_TRANSACTION = 500;
 
 
-    public static List<InventoryTransaction> getTransactionsForInv(String invId,
-                                                                   String currentTransaction) {
-        InventoryTransaction transaction = getTransactionByKey(currentTransaction);
+    /**
+     * Removes all transactions that have the specified envId and inventory key
+     *
+     * @param envId
+     * @param invId
+     */
+    public static void cleanTransactions(String envId,
+                                         String invId) {
+        Ebean.find(InventoryTransaction.class)
+             .where()
+             .eq("env_id", envId)
+             .eq("inventory_key", invId)
+             .delete();
+    }
+
+    /**
+     * Creates a new inventory snapshot with the specified envId
+     *
+     * @param envId
+     * @return
+     */
+    public static InventorySnapshot initInventorySnapshot(String envId) {
+        String snapshotKey = UUID.randomUUID().toString();
+        InventorySnapshot shot = new InventorySnapshot(snapshotKey, envId);
+        shot.insert();
+        shot.refresh(); // get the generated stuff
+        return shot;
+    }
+
+
+    /**
+     * Gets all transactions for the given inventory Id
+     *
+     * @param invId
+     * @return
+     */
+    public static List<InventoryTransaction> getTransactionsForInv(String invId) {
         return Ebean.find(InventoryTransaction.class)
                     .where()
                     .eq("inventory_key", invId)
-                    .eq("transaction_key", currentTransaction)
-                    .lt("transaction_id", transaction.getTransactionId())
+                    .orderBy()
+                    .asc("transaction_id")
                     .findList();
     }
 
 
+    /**
+     * finds a transaction by the given transaction key
+     *
+     * @param transKey
+     * @return
+     */
     public static InventoryTransaction getTransactionByKey(String transKey) {
         return Ebean.find(InventoryTransaction.class)
                     .where()
@@ -33,11 +74,19 @@ public class InventoryHelper {
                     .findUnique();
     }
 
+
+    /**
+     * Gets a map of productId -> InventoryItem for the given snapshot key
+     *
+     * @param envId
+     * @param snapshotKey
+     * @return
+     */
     public static Map<Integer, InventoryItem> getSnapshotItemMap(String envId, String snapshotKey) {
         List<InventoryItem> items = Ebean.find(InventoryItem.class)
                                          .where()
                                          .eq("env_id", envId)
-                                         .eq("snapshot_key", snapshotKey)
+                                         .eq("inventory_key", snapshotKey)
                                          .findList();
         if (NullOrEmpty(items)) {
             return new HashMap<>();
@@ -48,13 +97,32 @@ public class InventoryHelper {
     }
 
 
-    public static Optional<Inventory> findByKey(String key) {
+    /**
+     * Get's an inventory object by the given key
+     *
+     * @param key
+     * @return
+     */
+    public static Optional<Inventory> findInventoryByKey(String key) {
         return Optional.ofNullable(Ebean.find(Inventory.class)
                                         .where()
                                         .eq("inventory_key", key)
                                         .findUnique());
     }
 
+
+    /**
+     * Creates transactions with the specified invId and envId
+     * This validates all parts in the transactions
+     * Updates the inventory with the key passed to point to the newly creates transaction
+     * returns transaction key
+     *
+     * @param inventoryKey
+     * @param environmentKey
+     * @param transactions
+     * @return
+     * @throws Exception
+     */
     public static String handleTransactionItems(String inventoryKey,
                                                 String environmentKey,
                                                 InventoryTransaction... transactions) throws
@@ -94,7 +162,7 @@ public class InventoryHelper {
         Transaction ebeanTransaction = Ebean.beginTransaction();
         ebeanTransaction.setBatchSize(30);
         try {
-            Optional<Inventory> inventory = InventoryHelper.findByKey(inventoryKey);
+            Optional<Inventory> inventory = InventoryHelper.findInventoryByKey(inventoryKey);
             if (!inventory.isPresent()) {
                 throw new RuntimeException("Inventory doesn't exist");
             }
@@ -115,7 +183,7 @@ public class InventoryHelper {
         } catch (Exception e) {
             ebeanTransaction.rollback();
             throw new RuntimeException(
-                String.format("Error inserting into databaes. %s", e.getMessage()));
+                String.format("Error inserting into database. %s", e.getMessage()));
         }
 
     }

@@ -9,22 +9,52 @@ import javax.persistence.Table;
 
 @Entity
 @Table(name = "inventory_item")
-public class  InventoryItem extends EnvironmentModel {
+public class InventoryItem extends EnvironmentModel {
     @Id
     @Column
-    private int inventoryItemId;
+    private Integer inventoryItemId = null;
     @Column
     private String inventoryKey;
     @Column
     private int productId;
     @Column
-    private double count;
+    private Double count;
 
-    public int getInventoryItemId() {
+
+    /**
+     * Combines inventory item and transaction item totals and returns a new inventory item with
+     * new snapshot key. Assumes both products ids match.
+     *
+     * @param item
+     * @param trans
+     * @param newSnapshot
+     * @return
+     */
+    public static InventoryItem combineNew(InventoryItem item,
+                                           InventoryTransaction trans,
+                                           String newSnapshot,
+                                           String envId) {
+        double total = trans.getDifference() + item.getCount();
+        return new InventoryItem(total, item.getProductId(), newSnapshot, envId);
+    }
+
+
+    public InventoryItem() {
+    }
+
+
+    public InventoryItem(double count, int productId, String invKey, String envId) {
+        this.count = count;
+        this.productId = productId;
+        this.inventoryKey = invKey;
+        this.setEnvironmentId(envId);
+    }
+
+    public Integer getInventoryItemId() {
         return inventoryItemId;
     }
 
-    public void setInventoryItemId(int inventoryItemId) {
+    public void setInventoryItemId(Integer inventoryItemId) {
         this.inventoryItemId = inventoryItemId;
     }
 
@@ -44,11 +74,11 @@ public class  InventoryItem extends EnvironmentModel {
         this.productId = productId;
     }
 
-    public double getCount() {
+    public Double getCount() {
         return count;
     }
 
-    public void setCount(double count) {
+    public void setCount(Double count) {
         this.count = count;
     }
 }

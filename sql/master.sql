@@ -27,7 +27,7 @@ create table uom
   env_id      text,
   create_date timestamp default now(),
   update_date timestamp default now(),
-  constraint uom_pkey primary key (uom_name, env_id),
+  constraint uom_pkey primary key (uom_name, env_id)
 );
 
 
@@ -63,14 +63,9 @@ create table inventory_transaction
   difference      decimal,
   inventory_key   text,
   env_id         text,
-  create_date     timestamp
+  create_date     timestamp,
+  update_date timestamp
 );
-
-
-drop table inventory_transaction;
-
-
-drop table inventory;
 
 create table inventory_item
 (
@@ -83,5 +78,3 @@ create table inventory_item
   update_date       timestamp,
   constraint inventory_item_pkey primary key (inventory_item_id)
 );
-
-drop table inventory_item;

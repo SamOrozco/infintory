@@ -16,6 +16,11 @@ public class InventorySnapshot extends EnvironmentModel {
     @Column
     private String snapshotKey;
 
+    public InventorySnapshot(String snapshotKey, String envId) {
+        this.snapshotKey = snapshotKey;
+        this.setEnvironmentId(envId);
+    }
+
     public int getInventorySnapshotId() {
         return inventorySnapshotId;
     }

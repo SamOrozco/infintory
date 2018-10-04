@@ -53,6 +53,7 @@ public class DatabaseHelper {
     public static <T extends EnvironmentModel> T insertSingle(T model, String envId) {
         model.setEnvironmentId(envId);
         model.insert();
+        model.refresh();
         return model;
     }
 
