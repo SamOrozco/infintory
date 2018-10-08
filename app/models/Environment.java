@@ -14,7 +14,7 @@ import java.util.UUID;
 @Table(name = "environment")
 public class Environment extends Model {
 
-    @Column(name = "env_id")
+    @Column(name = "environment_id")
     private int environmentId;
 
     @Column(name = "environment_key")

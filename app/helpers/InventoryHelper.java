@@ -12,8 +12,52 @@ import java.util.*;
 import static helpers.ValidationHelper.NullOrEmpty;
 
 public class InventoryHelper {
-    private static final int MAX_TRANSACTION = 500;
+    private static final int MAX_TRANSACTION = 10 * 1000;
 
+
+    public static void rollbackTransaction(String invKey,
+                                           String transKey) {
+        int maxId = getMaxTransactionIdForKey(transKey);
+        Ebean.find(InventoryTransaction.class)
+             .where()
+             .gt("transaction_id", maxId)
+             .delete();
+    }
+
+
+    /**
+     * selecting the max transaction id from where the transaction key is equal to the given key
+     *
+     * @param transKey
+     * @return
+     */
+    public static int getMaxTransactionIdForKey(String transKey) {
+        List<InventoryTransaction> transactions = Ebean.find(InventoryTransaction.class)
+                                                       .where()
+                                                       .eq("transaction_key", transKey)
+                                                       .orderBy()
+                                                       .desc("transaction_id")
+                                                       .setFirstRow(0)
+                                                       .setMaxRows(1)
+                                                       .findPagedList()
+                                                       .getList();
+        if (NullOrEmpty(transactions)) {
+            throw new RuntimeException("Invalid transaction key");
+        }
+        return transactions.get(0).getTransactionId();
+    }
+
+    /**
+     * delets all transacitons with given trans action id
+     *
+     * @param transactionId
+     */
+    public static void clearTransaction(String transactionId) {
+        Ebean.find(InventoryTransaction.class)
+             .where()
+             .eq("transaction_key", transactionId)
+             .delete();
+    }
 
     /**
      * Removes all transactions that have the specified envId and inventory key
@@ -62,30 +106,58 @@ public class InventoryHelper {
 
 
     /**
+     * Gets all transactions for the given inventory Id
+     *
+     * @param invId
+     * @return
+     */
+    public static List<InventoryTransaction> getActiveTransactionsForInv(String invId) {
+        return Ebean.find(InventoryTransaction.class)
+                    .where()
+                    .eq("inventory_key", invId)
+                    .orderBy()
+                    .asc("transaction_id")
+                    .findList();
+    }
+
+
+    /**
      * finds a transaction by the given transaction key
      *
      * @param transKey
      * @return
      */
-    public static InventoryTransaction getTransactionByKey(String transKey) {
+    public static List<InventoryTransaction> getTransactionByKey(String transKey) {
         return Ebean.find(InventoryTransaction.class)
                     .where()
                     .eq("transaction_key", transKey)
-                    .findUnique();
+                    .findList();
+    }
+
+
+    /**
+     * this method gets an inventory snapshot by key
+     *
+     * @param snapshotKey
+     * @return
+     */
+    public static Optional<InventorySnapshot> getSnapshotByKey(String snapshotKey) {
+        return Optional.ofNullable(Ebean.find(InventorySnapshot.class)
+                                        .where()
+                                        .eq("snapshot_key", snapshotKey)
+                                        .findUnique());
     }
 
 
     /**
      * Gets a map of productId -> InventoryItem for the given snapshot key
      *
-     * @param envId
      * @param snapshotKey
      * @return
      */
-    public static Map<Integer, InventoryItem> getSnapshotItemMap(String envId, String snapshotKey) {
+    public static Map<Integer, InventoryItem> getSnapshotItemMap(String snapshotKey) {
         List<InventoryItem> items = Ebean.find(InventoryItem.class)
                                          .where()
-                                         .eq("env_id", envId)
                                          .eq("inventory_key", snapshotKey)
                                          .findList();
         if (NullOrEmpty(items)) {
@@ -185,6 +257,86 @@ public class InventoryHelper {
             throw new RuntimeException(
                 String.format("Error inserting into database. %s", e.getMessage()));
         }
+    }
 
+
+    /**
+     * Compile the previous snapshot total with the current list of transaction totals
+     * We assume all product ids are validate by this point so we will not validate.
+     *
+     * @param invItemMap
+     * @param transactions
+     * @return
+     */
+    public static Map<Integer, InventoryItem> compileInventory(
+        Map<Integer, InventoryItem> invItemMap,
+        List<InventoryTransaction> transactions,
+        String newSnapshotKey,
+        String envId) {
+        if (NullOrEmpty(transactions)) return invItemMap;
+        if (invItemMap == null) invItemMap = new HashMap<>();
+        Map<Integer, InventoryItem> resultMap = new HashMap<>();
+        for (InventoryTransaction trans : transactions) {
+            double diff = trans.getDifference();
+            int prodId = trans.getProductId();
+            InventoryItem resItem = resultMap.get(prodId);
+            InventoryItem existItem = invItemMap.get(prodId);
+            if (resItem != null) { // we have already seen this prod and put in resMap
+                double totalDiff = diff + resItem.getCount();
+                resultMap.put(prodId, new InventoryItem(totalDiff,
+                                                        prodId,
+                                                        newSnapshotKey,
+                                                        envId));
+            } else if (existItem != null) { // there is an item in the map and we haven't reached it
+                double totalDiff = diff + existItem.getCount();
+                resultMap.put(prodId, new InventoryItem(totalDiff,
+                                                        prodId,
+                                                        newSnapshotKey,
+                                                        envId));
+            } else { // net new item
+                resultMap.put(prodId, new InventoryItem(diff,
+                                                        prodId,
+                                                        newSnapshotKey,
+                                                        envId));
+            }
+        }
+        return resultMap;
+    }
+
+
+    /**
+     * returns a list of current totals from snapshot and any current transactions
+     *
+     * @param invId
+     * @return
+     */
+    public static Collection<InventoryItem> totalInventory(String invId, String envId) throws
+                                                                                       Exception {
+        Optional<Inventory> optInv = findInventoryByKey(invId);
+        if (!optInv.isPresent()) {
+            throw new RuntimeException(String.format("Inventory with key %s does not exist.",
+                                                     invId));
+        }
+        Inventory inv = optInv.get();
+        String currentSnapKey = inv.getCurrentSnapshot();
+        String currentTransactionKey = inv.getCurrentTransaction();
+
+        Map<Integer, InventoryItem> totalMap = null;
+        List<InventoryTransaction> transactions = null;
+
+        // fresh inventory with no transactions now
+        if (NullOrEmpty(currentSnapKey) && NullOrEmpty(currentTransactionKey)) {
+            return Collections.emptyList();
+        }
+        if (!NullOrEmpty(currentSnapKey)) {
+            totalMap = getSnapshotItemMap(currentSnapKey);
+        }
+        if (!NullOrEmpty(currentTransactionKey)) {
+            transactions = getActiveTransactionsForInv(invId);
+        }
+        return compileInventory(totalMap,
+                                transactions,
+                                invId,
+                                envId).values();
     }
 }

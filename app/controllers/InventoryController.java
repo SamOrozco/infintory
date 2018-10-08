@@ -4,10 +4,7 @@ import com.avaje.ebean.Ebean;
 import com.avaje.ebean.Transaction;
 import com.fasterxml.jackson.databind.JsonNode;
 import helpers.*;
-import models.inventory.Inventory;
-import models.inventory.InventoryItem;
-import models.inventory.InventorySnapshot;
-import models.inventory.InventoryTransaction;
+import models.inventory.*;
 import play.mvc.Controller;
 import play.mvc.Result;
 import tyrex.services.UUID;
@@ -18,6 +15,72 @@ import static helpers.InventoryHelper.getTransactionsForInv;
 import static helpers.ValidationHelper.NullOrEmpty;
 
 public class InventoryController extends Controller {
+
+
+    public Result getInventoryTransaction(String inventoryTransaction) {
+        try {
+            List<InventoryTransaction> transactions =
+                InventoryHelper.getTransactionByKey(inventoryTransaction);
+            if (transactions == null) {
+                return notFound(
+                    String.format("Transaction with key %s does not exist", inventoryTransaction));
+            }
+            return ok(JsonHelper.serializeJson(transactions));
+        } catch (Exception e) {
+            return internalServerError(e.getMessage());
+        }
+    }
+
+
+    /**
+     * Rolls inventory with given key back to Snapshot with given key this is a power full method.
+     * Being able to point an inventory to any snapshot. With great power comes great responsibility
+     *
+     * @param invKey
+     * @param snapshotkey
+     * @return
+     */
+    public Result rollbackToSnapshot(String invKey,
+                                     String snapshotkey) {
+        Optional<Inventory> optInv = InventoryHelper.findInventoryByKey(invKey);
+        if (!optInv.isPresent()) {
+            return notFound(String.format("Inventory with key %s not found", invKey));
+        }
+
+        Optional<InventorySnapshot> optSnap = InventoryHelper.getSnapshotByKey(snapshotkey);
+        if (!optSnap.isPresent()) {
+            return notFound(String.format("Inventory snapshot with key %s not found", snapshotkey));
+        }
+        try {
+            Inventory inventory = optInv.get();
+            // rollback to snapshot
+            inventory.setCurrentSnapshot(snapshotkey);
+            // reset transactions
+            inventory.setCurrentTransaction(null);
+            inventory.update();
+            return ok();
+        } catch (Exception e) {
+            return internalServerError("Error rolling back to snapshot, %s", e.getMessage());
+        }
+    }
+
+
+    /**
+     * rolls back an inventory to the given transaction Id
+     *
+     * @param invId
+     * @param transactionId
+     * @return
+     */
+    public Result rollbackToTransaction(String invId,
+                                        String transactionId) {
+        try {
+            InventoryHelper.rollbackTransaction(invId, transactionId);
+            return ok();
+        } catch (Exception e) {
+            return internalServerError(e.getMessage());
+        }
+    }
 
 
     /**
@@ -39,21 +102,50 @@ public class InventoryController extends Controller {
 
 
     /**
-     * Creates an inventory item based on corresponding json body single or multi
+     * Gets all inventory objects for an environment
      *
      * @param envId
      * @return
      */
-    public Result createInventoryItem(String envId) {
-        return RequestHelper.createEnvironmentModelRequestHandle(request(),
-                                                                 InventoryItem.class,
-                                                                 InventoryItem[].class,
-                                                                 envId);
+    public Result getInventory(String envId) {
+        return RequestHelper.findByEnvironmentId(Inventory.class,
+                                                 envId);
+    }
+
+    /**
+     * This methods returns a list of product total for an inventory
+     *
+     * @param invKey
+     * @return
+     */
+    public Result getInventoryTotals(String envId, String invKey) {
+        try {
+            return ok(JsonHelper.serializeJson(InventoryHelper.totalInventory(invKey, envId)));
+        } catch (Exception e) {
+            return internalServerError(e.getMessage());
+        }
+    }
+
+
+    /**
+     * deletes all inventoryTransaction with given key
+     *
+     * @param transId
+     * @return
+     */
+    public Result revertTransaction(String transId) {
+        try {
+            InventoryHelper.clearTransaction(transId);
+            return ok();
+        } catch (Exception e) {
+            return internalServerError(e.getMessage());
+        }
     }
 
 
     /**
      * returns all transactions for the given inventory key
+     *
      * @param inventoryKey
      * @return
      */
@@ -126,6 +218,7 @@ public class InventoryController extends Controller {
      * @return
      */
     public Result commitInventory(String envId, String invId) {
+        long startFunc = System.currentTimeMillis();
 
         // validating inventory exists
         Optional<Inventory> optInv = InventoryHelper.findInventoryByKey(invId);
@@ -144,8 +237,7 @@ public class InventoryController extends Controller {
         List<InventoryTransaction> transactions = null;
         if (!NullOrEmpty(curSnapshotKey)) {
             //productId -> InvItem
-            productItemMap = InventoryHelper.getSnapshotItemMap(envId,
-                                                                curSnapshotKey);
+            productItemMap = InventoryHelper.getSnapshotItemMap(curSnapshotKey);
         }
         if (!NullOrEmpty(curTransactionKey)) {
             transactions = getTransactionsForInv(invId);
@@ -159,10 +251,11 @@ public class InventoryController extends Controller {
 
         InventorySnapshot newSnap = InventoryHelper.initInventorySnapshot(envId);
         // all new inventory items have the new snapshot key
-        Map<Integer, InventoryItem> totalMap = compileInventory(productItemMap,
-                                                                transactions,
-                                                                newSnap.getSnapshotKey(),
-                                                                envId);
+        Map<Integer, InventoryItem> totalMap = InventoryHelper.compileInventory(productItemMap,
+                                                                                transactions,
+                                                                                newSnap
+                                                                                    .getSnapshotKey(),
+                                                                                envId);
 
         try {
             Optional<Collection<Integer>> invalidProductIds =
@@ -174,61 +267,21 @@ public class InventoryController extends Controller {
 
             for (InventoryItem item : totalMap.values()) {
                 item.insert();
+                item.refresh();
             }
             inventory.setCurrentSnapshot(newSnap.getSnapshotKey());
             inventory.update();
 
             InventoryHelper.cleanTransactions(envId, invId);
             transaction.commit();
-            return ok();
+            return ok(
+                JsonHelper.serializeJson(new InventorySnapshotResponse(newSnap.getSnapshotKey(),
+                                                                       totalMap.values())));
         } catch (Exception e) {
             transaction.rollback();
             return internalServerError(e.getMessage());
         }
 
 
-    }
-
-
-    /**
-     * Compile the previous snapshot total with the current list of transaction totals
-     * We assume all product ids are validate by this point so we will not validate.
-     *
-     * @param invItemMap
-     * @param transactions
-     * @return
-     */
-    private Map<Integer, InventoryItem> compileInventory(Map<Integer, InventoryItem> invItemMap,
-                                                         List<InventoryTransaction> transactions,
-                                                         String newSnapshotKey,
-                                                         String envId) {
-        if (NullOrEmpty(transactions)) return invItemMap;
-        if (invItemMap == null) invItemMap = new HashMap<>();
-        Map<Integer, InventoryItem> resultMap = new HashMap<>();
-        for (InventoryTransaction trans : transactions) {
-            double diff = trans.getDifference();
-            int prodId = trans.getProductId();
-            InventoryItem resItem = resultMap.get(prodId);
-            InventoryItem existItem = invItemMap.get(prodId);
-            if (resItem != null) { // we have already seen this prod and put in resMap
-                double totalDiff = diff + resItem.getCount();
-                resultMap.put(prodId, new InventoryItem(totalDiff,
-                                                        prodId,
-                                                        newSnapshotKey,
-                                                        envId));
-            } else if (existItem != null) { // there is an item in the map and we haven't reached it
-                double totalDiff = diff + existItem.getCount();
-                resultMap.put(prodId, new InventoryItem(totalDiff,
-                                                        prodId,
-                                                        newSnapshotKey,
-                                                        envId));
-            } else { // net new item
-                resultMap.put(prodId, new InventoryItem(diff,
-                                                        prodId,
-                                                        newSnapshotKey,
-                                                        envId));
-            }
-        }
-        return resultMap;
     }
 }

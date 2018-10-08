@@ -1,18 +1,33 @@
+#User
+POST           /user                                                  controllers.ApplicationController.options()
+
+
 #ENVIRONMENT ROUTES
-GET         /environment                                controllers.EnvironmentController.createEnvironment()
+GET            /environment                                           controllers.EnvironmentController.createEnvironment()
 
 #PRODUCT ROUTES
-GET         /:envID/product                             controllers.ProductController.getProducts(envID)
-POST        /:envID/product                             controllers.ProductController.createProduct(envID)
+GET            /:envID/product                                        controllers.ProductController.getProducts(envID)
+POST           /:envID/product                                        controllers.ProductController.createProduct(envID)
 
 #Uom routes
-POST        /:envID/uom                                 controllers.UomController.createUom(envID)
+POST           /:envID/uom                                            controllers.UomController.createUom(envID)
+GET            /:envID/uom                                            controllers.UomController.getUoms(envID)
 
 #Inventory
 #creating things
-POST        /:envID/inventory                           controllers.InventoryController.createInventory(envID)
-POST        /:envID/inventory-item                      controllers.InventoryController.createInventoryItem(envID)
-POST        /:envID/inventory-transaction/:invID        controllers.InventoryController.inventoryTransaction(envID, invID)
-POST        /:envID/inventory-commit/:invID             controllers.InventoryController.commitInventory(envID, invID)
-#getting things
-GET         /transactions/:invID                        controllers.InventoryController.getInventoryTransactions(invID)
+GET            /:envID/inventory                                      controllers.InventoryController.getInventory(envID)
+GET            /:envID/inventory/:invID/totals                        controllers.InventoryController.getInventoryTotals(envID, invID)
+POST           /:envID/inventory                                      controllers.InventoryController.createInventory(envID)
+POST           /:envID/inventory-transaction/:invID                   controllers.InventoryController.inventoryTransaction(envID, invID)
+POST           /:envID/inventory-commit/:invID                        controllers.InventoryController.commitInventory(envID, invID)
+GET            /inventory/transaction/:transId/revert                 controllers.InventoryController.revertTransaction(transId)
+# the inventory key is unique so you dont need to know the environment
+# envId is the envkey
+GET            /inventory/:invID/transactions                         controllers.InventoryController.getInventoryTransactions(invID)
+GET            /inventory/transaction/:transId                        controllers.InventoryController.getInventoryTransaction(transId)
+GET            /inventory/:invID/transaction/:transId/rollback        controllers.InventoryController.rollbackToTransaction(invID, transId)
+GET            /inventory/:invID/snapshot/:snapshotId/rollback        controllers.InventoryController.rollbackToSnapshot(invID, snapshotId)
+
+#CORS
+OPTIONS        /                                                      controllers.ApplicationController.options()
+OPTIONS        /*path                                                 controllers.ApplicationController.optionss(path)

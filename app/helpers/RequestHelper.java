@@ -1,10 +1,13 @@
 package helpers;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import models.Product;
 import models.shared.EnvironmentModel;
 import play.mvc.Http;
 import play.mvc.Result;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.function.Consumer;
 
@@ -31,6 +34,21 @@ public class RequestHelper {
                                                                         envId,
                                                                         mutators);
             return ok(resultNode);
+        } catch (Exception e) {
+            return internalServerError(e.getMessage());
+        }
+    }
+
+
+    public static <S> Result findByEnvironmentId(Class<S> clazz,
+                                                 String envId) {
+        try {
+            List<S> ss = DatabaseHelper.findByEnvironmentId(clazz,
+                                                            envId);
+            if (ss == null) {
+                ss = new ArrayList<>();
+            }
+            return ok(JsonHelper.serializeJson(ss));
         } catch (Exception e) {
             return internalServerError(e.getMessage());
         }

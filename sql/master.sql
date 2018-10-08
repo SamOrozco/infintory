@@ -63,7 +63,7 @@ create table inventory_transaction
   difference      decimal,
   inventory_key   text,
   env_id         text,
-  create_date     timestamp,
+  create_date     timestamp default now(),
   update_date timestamp
 );
 

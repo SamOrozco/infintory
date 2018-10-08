@@ -5,6 +5,7 @@ import com.avaje.ebean.Transaction;
 import com.fasterxml.jackson.databind.JsonNode;
 import models.shared.EnvironmentModel;
 
+import java.util.List;
 import java.util.function.Consumer;
 
 public class DatabaseHelper {
@@ -92,5 +93,13 @@ public class DatabaseHelper {
             }
         }
 
+    }
+
+
+    public static <S> List<S> findByEnvironmentId(Class<S> clazz, String envId) {
+        return Ebean.find(clazz)
+                    .where()
+                    .eq("env_id", envId)
+                    .findList();
     }
 }

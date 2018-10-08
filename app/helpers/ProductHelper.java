@@ -10,6 +10,13 @@ import java.util.Optional;
 public class ProductHelper {
 
 
+    /**
+     * returns an optional of a product. This methods attempts to get a product by Ids and envId
+     *
+     * @param productID
+     * @param envKey
+     * @return
+     */
     public static Optional<Product> getProductById(int productID,
                                                    String envKey) {
         return Optional.ofNullable(Ebean.find(Product.class)
@@ -20,15 +27,30 @@ public class ProductHelper {
     }
 
 
+    /**
+     * This method determines if a product exists with the given productId and envId
+     *
+     * @param productID
+     * @param envId
+     * @return
+     */
     public static boolean exists(int productID,
-                                 String envKey) {
+                                 String envId) {
         return Ebean.find(Product.class)
                     .where()
                     .eq("product_id", productID)
-                    .eq("env_id", envKey)
+                    .eq("env_id", envId)
                     .findUnique() != null;
     }
 
+    /**
+     * This method takes a collection of productIds and an envId and returns a list of any
+     * product ids that don't exist
+     *
+     * @param ids
+     * @param envId
+     * @return
+     */
     public static Optional<Collection<Integer>> validateProductIds(Collection<Integer> ids,
                                                                    String envId) {
         List<Product> products = Ebean.find(Product.class)

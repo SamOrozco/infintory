@@ -3,9 +3,14 @@ package helpers;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.joda.JodaModule;
 
 public class JsonHelper {
-    private static final ObjectMapper mapper = new ObjectMapper();
+    private static final ObjectMapper mapper;
+    static {
+        mapper = new ObjectMapper();
+        mapper.registerModule(new JodaModule());
+    }
 
 
     public static <T> T deserializeObject(Class<T> clazz, JsonNode node) throws Exception {

@@ -1,6 +1,7 @@
 package models.shared;
 
 import com.avaje.ebean.Model;
+import com.fasterxml.jackson.annotation.JsonFormat;
 import org.joda.time.DateTime;
 
 import javax.persistence.Column;
@@ -11,6 +12,7 @@ public abstract class EnvironmentModel extends Model {
     @Column(name = "env_id")
     private String environmentId;
     @Column(updatable = false, insertable = false)
+    @JsonFormat(pattern = "mm:DD:yyyy")
     private DateTime createDate;
     @Column(updatable = false, insertable = false)
     private DateTime updateDate;

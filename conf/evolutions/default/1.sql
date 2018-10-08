@@ -4,7 +4,7 @@
 # --- !Ups
 
 create table environment (
-  env_id                        integer,
+  environment_id                integer,
   environment_key               varchar(255),
   create_date                   timestamptz
 );

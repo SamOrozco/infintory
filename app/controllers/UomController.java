@@ -13,4 +13,10 @@ public class UomController extends Controller {
                                                                  Uom[].class,
                                                                  envId);
     }
+
+
+    public Result getUoms(String envId) {
+        return RequestHelper.findByEnvironmentId(Uom.class,
+                                                 envId);
+    }
 }
